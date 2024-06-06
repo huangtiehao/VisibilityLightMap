@@ -25,7 +25,7 @@ public class VisGenTool : EditorWindow
     }
     public struct SHCoe
     {
-        public float3 a,b,c;
+        public float4 a,b,c,d;
     }
     private void OnGUI()
     {
@@ -122,48 +122,119 @@ public class VisGenTool : EditorWindow
         };
 
         SHCoe[] visCoe=new SHCoe[1024*1024];
-        ComputeBuffer visCoeBuffer = new ComputeBuffer(1024*1024, sizeof(float)*9);
+        ComputeBuffer visCoeBuffer = new ComputeBuffer(1024*1024, sizeof(float)*16);
         visCoeBuffer.SetData(visCoe);
+        
+        SHCoe[] lightCoe=new SHCoe[1024*1024];
+        ComputeBuffer lightCoeBuffer = new ComputeBuffer(1024*1024, sizeof(float)*16);
+        lightCoeBuffer.SetData(lightCoe);
             
         //Texture2D visLightMap = new Texture2D(SHtexture.width, SHtexture.height, TextureFormat.ARGB32, false);
         CommandBuffer commandBuffer = new CommandBuffer();
         commandBuffer.SetRenderTarget(renderTexture);
         commandBuffer.ClearRenderTarget(true, true, Color.black, 1f);
         commandBuffer.name = "Render My Mesh";
+        //Graphics.SetRandomWriteTarget(1,visCoeBuffer);
         commandBuffer.SetRandomWriteTarget(1,visCoeBuffer);
         commandBuffer.SetGlobalBuffer("visCoe",visCoeBuffer);
+        //Graphics.SetRandomWriteTarget(2,lightCoeBuffer);
+        commandBuffer.SetRandomWriteTarget(2, lightCoeBuffer);
+        commandBuffer.SetGlobalBuffer("lightCoe",lightCoeBuffer);
+        
         commandBuffer.SetGlobalBuffer("triangles",triangleBuffer);
         commandBuffer.SetGlobalBuffer("bvhNodes",bvhNodesBuffer);
         commandBuffer.SetGlobalInt("triangleCnt",meshTriangles.Length);
 
         //Graphics.Blit(null, renderTexture, material, 0);
         commandBuffer.DrawMesh(mesh,Matrix4x4.identity, material);
-        //Graphics.ExecuteCommandBuffer(commandBuffer);
+        Graphics.ExecuteCommandBuffer(commandBuffer);
+        commandBuffer.ClearRandomWriteTargets();
         
         visCoeBuffer.GetData(visCoe);
+        lightCoeBuffer.GetData(lightCoe);
         
+        for (int i = 0; i < 10; ++i)
+        {
+            for (int j = 0; j < 10; ++j)
+            {
+                Debug.Log(i+" "+j+" "+visCoe[i*1024+j].a);
+            }
+        }
+
+        Texture2D visCoeTex1 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D visCoeTex2 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D visCoeTex3 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D visCoeTex4 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D lightCoeTex1 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D lightCoeTex2 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D lightCoeTex3 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        Texture2D lightCoeTex4 = new Texture2D(1024, 1024,TextureFormat.RGBAFloat,false);
+        
+        float4[] visCoe1 = new float4[1024 * 1024];
+        float4[] visCoe2 = new float4[1024 * 1024];
+        float4[] visCoe3 = new float4[1024 * 1024];
+        float4[] visCoe4 = new float4[1024 * 1024];
+        
+        float4[] lightCoe1 = new float4[1024 * 1024];
+        float4[] lightCoe2 = new float4[1024 * 1024];
+        float4[] lightCoe3 = new float4[1024 * 1024];
+        float4[] lightCoe4 = new float4[1024 * 1024];
         for (int i = 0; i < 1024; ++i)
         {
             for (int j = 0; j < 1024; ++j)
             {
-                if(visCoe[i*1024+j].a.x!=0)Debug.Log(i+" "+j+" "+visCoe[i*1024+j].a);
+                visCoe1[i * 1024 + j] = visCoe[i * 1024 + j].a;
+                visCoe2[i * 1024 + j] = visCoe[i * 1024 + j].b;
+                visCoe3[i * 1024 + j] = visCoe[i * 1024 + j].c;
+                visCoe4[i * 1024 + j] = visCoe[i * 1024 + j].d;
+                lightCoe1[i * 1024 + j] = lightCoe[i * 1024 + j].a;
+                lightCoe2[i * 1024 + j] = lightCoe[i * 1024 + j].b;
+                lightCoe3[i * 1024 + j] = lightCoe[i * 1024 + j].c;
+                lightCoe4[i * 1024 + j] = lightCoe[i * 1024 + j].d;
+                if(visCoe[i * 1024 + j].a.x!=0)Debug.Log( visCoe[i * 1024 + j].a);
             }
         }
-
-        Texture2D SHCoeTex = new Texture2D(1024, 1024);
-
-        
         
         RenderTexture.active = renderTexture;
         
-        Texture2D visLightMap = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.ARGB32, false);
+        Texture2D visLightMap = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.RGBAFloat, false);
         // Prompt the user to save the file.
         visLightMap.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height),0,0);
         visLightMap.Apply();
-        string fileName = "visMap";
-        SHCoeTex.SetPixelData(visCoe, 0);
+        string visName = "visMap";
+        string lightName = "lightMap";
+        visCoeTex1.SetPixelData(visCoe1, 0);
+        visCoeTex2.SetPixelData(visCoe2, 0);
+        visCoeTex3.SetPixelData(visCoe3, 0);
+        visCoeTex4.SetPixelData(visCoe4, 0);
+        lightCoeTex1.SetPixelData(lightCoe1, 0);
+        lightCoeTex2.SetPixelData(lightCoe2, 0);
+        lightCoeTex3.SetPixelData(lightCoe3, 0);
+        lightCoeTex4.SetPixelData(lightCoe4, 0);
         
-        AssetDatabase.CreateAsset(SHCoeTex,savePath+fileName+".asset");
+        AssetDatabase.CreateAsset(visCoeTex1,savePath+visName+"1.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AssetDatabase.CreateAsset(visCoeTex2,savePath+visName+"2.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AssetDatabase.CreateAsset(visCoeTex3,savePath+visName+"3.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AssetDatabase.CreateAsset(visCoeTex4,savePath+visName+"4.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        
+        AssetDatabase.CreateAsset(lightCoeTex1,savePath+lightName+"1.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AssetDatabase.CreateAsset(lightCoeTex2,savePath+lightName+"2.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AssetDatabase.CreateAsset(lightCoeTex3,savePath+lightName+"3.asset");
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        AssetDatabase.CreateAsset(lightCoeTex4,savePath+lightName+"4.asset");
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         //Debug.Log("generate "+savePath+"/"+fileName+" sdf success");

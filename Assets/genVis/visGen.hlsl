@@ -8,7 +8,7 @@
 
 struct SHCoe
 {
-    float3 a,b,c;
+    float4 a,b,c,d;
 };
 struct Triangle {
     float3 a, b, c;
@@ -23,11 +23,12 @@ struct BVHNode {
 };
 
 
-uint triangleCnt;
+
 RWStructuredBuffer<SHCoe>visCoe;
+RWStructuredBuffer<SHCoe>lightCoe;
 StructuredBuffer<Triangle> triangles;
 StructuredBuffer<BVHNode> bvhNodes;
-
+uint triangleCnt;
 // sampler3D SDF_tex;
 
 TEXTURE2D(_BaseMap);
@@ -181,10 +182,10 @@ bool hitArray(Ray ray, int l, int r) {
 bool hitBVH(Ray ray) {
     
     // 栈
-    int stack[256];
+    int stack[22];
     int sp = 0;
     stack[sp++] = 1;
-    while(sp>0) {
+    while(sp>0&&sp<12) {
         int top = stack[--sp];
         BVHNode node = getBVHNode(top);
         
@@ -215,15 +216,6 @@ Varyings VoxelPassVertex(Attributes input)
     output.normalWS=TransformObjectToWorldNormal(input.normalOS);
     output.baseUV=input.baseUV;
     return output;
-
-     // Varyings output;
-     // output.positionWS.xyz=TransformObjectToWorld(input.positionOS);
-     // output.positionCS=TransformWorldToHClip(output.positionWS);
-     // float4 viewPos=mul(VX,float4(output.positionWS.xyz,1));
-     // //float4 viewPos=float4(TransformWorldToView(output.positionWS),1.0);
-     // //output.positionCS=TransformWViewToHClip(viewPos);
-     // output.positionCS = mul(PX,viewPos); 
-     // return output;
     
 }
 
@@ -258,17 +250,22 @@ float getVisTri(Ray ray)
 //     return 0;
 // }
 
-float integ(float3 normal,float3 worldPos,int i)
+void integ(Varyings input)
 {
-    float3 N = normalize(normal);
-    float ans=0;
-    
+    float3 N = normalize(input.normalWS);
+    float visAns[16];
+    float lightAns[16];
+    for(int i=0;i<16;++i)
+    {
+        visAns[i]=0;
+        lightAns[i]=0;
+    }
     // tangent space calculation from origin point
     float3 up = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
     float3 right = normalize(cross(up, N));
     up = normalize(cross(N, right));
        
-    float sampleDelta = 0.1;
+    float sampleDelta = 0.3;
     float nrSamples = 0.0;
     for(float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta)
     {
@@ -280,16 +277,57 @@ float integ(float3 normal,float3 worldPos,int i)
 
             float3 worldDir=tangentSample.x * right + tangentSample.y * up + tangentSample.z * N; 
             Ray ray;
-            ray.orig=worldPos;
+            ray.orig=input.positionWS;
             ray.dir=worldDir;
             float v=getVisTri(ray);
+
+            float l=1;
             //float v=1.0;
-            ans+= v*SHfunction(i,worldDir)*cos(theta) * sin(theta);
+            for(int i=0;i<16;++i)
+            {
+                visAns[i]+= v*SHfunction(i,worldDir)*2*PI;
+                lightAns[i]+=l*SHfunction(i,worldDir)*2*PI*cos(theta);
+            }
+
+            nrSamples+=1;
 
             //irradiance += texture(cubeMap, sampleVec).rgb * cos(theta) * sin(theta);
         }
     }
-    return ans;
+
+    visCoe[get_1d_uv(1024*input.baseUV)].a[0]=visAns[0]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].a[1]=visAns[1]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].a[2]=visAns[2]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].a[3]=visAns[3]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].b[0]=visAns[4]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].b[1]=visAns[5]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].b[2]=visAns[6]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].b[3]=visAns[7]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].c[0]=visAns[8]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].c[1]=visAns[9]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].c[2]=visAns[10]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].c[3]=visAns[11]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].d[0]=visAns[12]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].d[1]=visAns[13]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].d[2]=visAns[14]/nrSamples;
+    visCoe[get_1d_uv(1024*input.baseUV)].d[3]=visAns[15]/nrSamples;
+    
+    lightCoe[get_1d_uv(1024*input.baseUV)].a[0]=lightAns[0]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].a[1]=lightAns[1]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].a[2]=lightAns[2]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].a[3]=lightAns[3]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].b[0]=lightAns[4]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].b[1]=lightAns[5]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].b[2]=lightAns[6]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].b[3]=lightAns[7]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].c[0]=lightAns[8]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].c[1]=lightAns[9]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].c[2]=lightAns[10]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].c[3]=lightAns[11]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].d[0]=lightAns[12]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].d[1]=lightAns[13]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].d[2]=lightAns[14]/nrSamples;
+    lightCoe[get_1d_uv(1024*input.baseUV)].d[3]=lightAns[15]/nrSamples;
 }
 
 
@@ -298,15 +336,9 @@ float4 VoxelPassFragment (Varyings input):SV_TARGET
 {
     //return float4(0.0f,0.0f,1.0f,1.0f);
     //SH[input.baseUV]=integ(input.normalWS,0,input.positionWS);
-    visCoe[get_1d_uv(1024*input.baseUV)].a.x=1.0;
-    visCoe[get_1d_uv(1024*input.baseUV)].a.y=integ(input.normalWS,input.positionWS,1);
-    visCoe[get_1d_uv(1024*input.baseUV)].a.z=integ(input.normalWS,input.positionWS,2);
-    visCoe[get_1d_uv(1024*input.baseUV)].b.x=integ(input.normalWS,input.positionWS,3);
-    visCoe[get_1d_uv(1024*input.baseUV)].b.y=integ(input.normalWS,input.positionWS,4);
-    visCoe[get_1d_uv(1024*input.baseUV)].b.z=integ(input.normalWS,input.positionWS,5);
-    visCoe[get_1d_uv(1024*input.baseUV)].c.x=integ(input.normalWS,input.positionWS,6);
-    visCoe[get_1d_uv(1024*input.baseUV)].c.y=integ(input.normalWS,input.positionWS,7);
-    visCoe[get_1d_uv(1024*input.baseUV)].c.z=integ(input.normalWS,input.positionWS,8);
+
+    integ(input);
+    //visCoe[int2(0,0)].a=float4(1,1,1,0);
     //SH[input.baseUV*1024]=integ(input.normalWS,input.positionWS);
     return float4(1,1,0,1); 
     //return integ(input.normalWS,input.positionWS);

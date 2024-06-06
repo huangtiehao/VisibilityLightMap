@@ -14,7 +14,7 @@ Shader "GI/VisLightMap"
         Pass
         {
             HLSLPROGRAM
-            #pragma target 4.5
+            #pragma target 5.0
             #pragma vertex VoxelPassVertex
             #pragma fragment VoxelPassFragment
             #include "visGen.hlsl"
